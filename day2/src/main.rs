@@ -1,45 +1,5 @@
 use std::{cmp, fs, ops::BitOr};
 
-fn allowed_color(color: &str) -> bool {
-    let parts: Vec<&str> = color.trim().split(" ").collect();
-    let cnt = parts[0].parse::<i32>().unwrap();
-    return cnt
-        <= match parts[1] {
-            "blue" => 14,
-            "red" => 12,
-            "green" => 13,
-            _ => panic!("unexpected color: {}", parts[1]),
-        };
-}
-
-fn allowed_choice(choice: &str) -> bool {
-    choice.trim().split(",").all(allowed_color)
-}
-
-fn allowed_game(game: &str) -> bool {
-    game.trim()
-        .split(':')
-        .nth(1)
-        .unwrap()
-        .split(';')
-        .all(allowed_choice)
-}
-
-fn weight(game: &str) -> i32 {
-    if allowed_game(game) {
-        game.split(":")
-            .nth(0)
-            .unwrap()
-            .split(" ")
-            .nth(1)
-            .unwrap()
-            .parse::<i32>()
-            .unwrap()
-    } else {
-        0
-    }
-}
-
 struct RGB(i32, i32, i32);
 
 impl RGB {
@@ -74,13 +34,37 @@ fn rgb(set: &str) -> RGB {
     return rgb;
 }
 
-fn power(game: &str) -> i32 {
+fn game_power_rgb(game: &str) -> RGB {
     let sets = game.trim().split(":").nth(1).unwrap();
-    let mut power = RGB(0, 0, 0);
+    let mut power_rgb = RGB(0, 0, 0);
     for s in sets.split(";") {
-        power = power | rgb(s);
+        power_rgb = power_rgb | rgb(s);
     }
-    power.power()
+    power_rgb
+}
+
+fn possible_game(game: &str) -> bool {
+    let rgb = game_power_rgb(game);
+    rgb.0 <= 12 && rgb.1 <= 13 && rgb.2 <= 14
+}
+
+fn weight(game: &str) -> i32 {
+    if possible_game(game) {
+        game.split(":")
+            .nth(0)
+            .unwrap()
+            .split(" ")
+            .nth(1)
+            .unwrap()
+            .parse::<i32>()
+            .unwrap()
+    } else {
+        0
+    }
+}
+
+fn power(game: &str) -> i32 {
+    game_power_rgb(game).power()
 }
 
 fn main() {
