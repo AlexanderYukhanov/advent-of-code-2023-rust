@@ -1,16 +1,16 @@
 use std::{fs, collections::{HashMap, HashSet}};
 
-fn get_char_at(l: i32, p: i32, lines: &Vec<&str>) -> char {
-    if l < 0 || l as usize >= lines.len() || p < 0 || p as usize >= lines[0].len() {
+fn at(l: i32, p: i32, lines: &Vec<&str>) -> char {
+    if l < 0 || l as usize >= lines[0].len() || p < 0 || p as usize >= lines.len() {
         return '.';
     }
     return lines[l as usize].chars().nth(p as usize).unwrap();
 }
 
-fn has_symbol_neighbor(l: usize, p: usize, lines: &Vec<&str>) -> bool {
+fn good(l: usize, p: usize, lines: &Vec<&str>) -> bool {
     for i in -1 ..= 1 {
         for j in -1 ..= 1 {
-            let ch = get_char_at((l as i32) + i, (p as i32) + j, lines);
+            let ch = at((l as i32) + i, (p as i32) + j, lines);
             if ch != '.' && ! ch.is_digit(10) {
                 return true;
             }
@@ -19,10 +19,10 @@ fn has_symbol_neighbor(l: usize, p: usize, lines: &Vec<&str>) -> bool {
     return false;
 }
 
-fn collect_starts(l: usize, p: usize, nid: usize, lines: &Vec<&str>, stars: &mut HashMap<(usize, usize), HashSet<usize>>) {
+fn mark_around(l: usize, p: usize, nid: usize, lines: &Vec<&str>, stars: &mut HashMap<(usize, usize), HashSet<usize>>) {
     for i in -1 ..= 1 {
         for j in -1 ..= 1 {
-            let ch = get_char_at((l as i32) + i, (p as i32) + j, lines);
+            let ch = at((l as i32) + i, (p as i32) + j, lines);
             if ch == '*' {
                 let starpos = ((l as i32 + i) as usize, (p as i32 + j) as usize);
                 stars.entry(starpos).or_insert(HashSet::new()).insert(nid);
@@ -31,45 +31,50 @@ fn collect_starts(l: usize, p: usize, nid: usize, lines: &Vec<&str>, stars: &mut
     }
 }
 
-fn part1(lines: &Vec<&str>) -> u32 {
+
+fn main() {
+    let content = fs::read_to_string("input.txt").unwrap();
+    let lines: Vec<&str> = content.split("\n").collect();
     let mut res = 0;
     let mut cur = 0;
-    let mut good = false;
+    let mut good_number = false;
     for l in 0..lines.len() {
-        if good {
+        if good_number {
             res += cur;
+            println!("{}", cur);
         }
         cur = 0;
-        good = false;
+        good_number = false;
         for i in 0..lines[l].len() {
             if lines[l].chars().nth(i).unwrap().is_digit(10) {
-                if has_symbol_neighbor(l, i, &lines) {
-                    good = true;
+                if good(l, i, &lines) {
+                    good_number = true;
                 }
                 cur = cur * 10 + lines[l].chars().nth(i).unwrap().to_digit(10).unwrap();
             } else {
-                if good {
+                if good_number {
+                    println!("{}", cur);
                     res += cur;
                 }
                 cur = 0;
-                good = false;
+                good_number = false;
             }
         }
     }
-    if good {
+    if good_number {
         res += cur;
+        println!("{}", cur);
     }
-    return res;
-}
+    println!("{}", res);
 
-fn part2(lines: &Vec<&str>) -> u32 {
     let mut numbers: Vec<u32> = vec![];
     let mut stars: HashMap<(usize, usize), HashSet<usize>> = HashMap::new();
-    let mut cur = 0;
+
     for l in 0..lines.len() {
         for i in 0..lines[l].len() {
+            cur = 0;
             if lines[l].chars().nth(i).unwrap().is_digit(10) {
-                collect_starts(l, i, numbers.len(), &lines, &mut stars);
+                mark_around(l, i, numbers.len(), &lines, &mut stars);
                 cur = cur * 10 + lines[l].chars().nth(i).unwrap().to_digit(10).unwrap();
             } else {
                 if cur != 0 {
@@ -83,19 +88,12 @@ fn part2(lines: &Vec<&str>) -> u32 {
             cur = 0;
         }
     }
-    let  mut res = 0;
+    let  mut result = 0;
     for key in stars.keys() {
         let nmb = &stars[key];
         if nmb.len() == 2 {
-            res += nmb.iter().map(|ind| numbers[*ind]).fold(1, |acc, v| acc * v)
+            result += nmb.iter().map(|ind| numbers[*ind]).fold(1, |acc, v| acc * v)
         }
     }
-    return res;
-}
-
-fn main() {
-    let content = fs::read_to_string("input.txt").unwrap();
-    let lines: Vec<&str> = content.split("\n").map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-    println!("Part 1: {}", part1(&lines));
-    println!("Part 2: {}", part2(&lines));
+    println!("{}", result)
 }
