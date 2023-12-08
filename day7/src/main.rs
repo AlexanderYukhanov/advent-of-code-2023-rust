@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashMap, fs};
 
 const CARDS_ORDER: &str = "AKQJT98765432";
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Debug)]
 struct Hand {
     cards: String,
     bid: usize,
@@ -62,10 +62,10 @@ fn comparator(joker: char) -> impl for<'a, 'b> Fn(&'a Hand, &'b Hand) -> std::cm
 }
 
 fn accumulate_bids(hands: &Vec<Hand>) -> usize {
-    return hands.iter().enumerate().fold(0, |acc, h| {
-        let (ind, &ref hand) = h;
-        return acc + (hands.len() - ind) * hand.bid;
-    });
+    return hands
+        .iter()
+        .enumerate()
+        .fold(0, |acc, (ind, hand)| acc + (hands.len() - ind) * hand.bid);
 }
 
 fn main() {
