@@ -16,14 +16,10 @@ impl Hand {
         self.cards
             .chars()
             .filter(|c| *c != joker)
-            .fold(&mut kinds, |acc, c| {
-                *acc.entry(c).or_insert(0) += 1;
-                acc
-            });
+            .for_each(|c| *kinds.entry(c).or_insert(0) += 1);
         let len = kinds.len();
-        let mut longest = kinds.values().max().and_then(|a| Some(*a)).unwrap_or(0);
-        longest += jokers;
-        match (len, longest) {
+        let longest = *kinds.values().max().unwrap_or(&0);
+        match (len, longest + jokers) {
             (0, _) => 0, // all jokers == five of a kind
             (1, _) => 0, // five of a kind
             (2, 4) => 1, // four of a kind
