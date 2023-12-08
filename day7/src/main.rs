@@ -1,7 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, fs};
 
 const CARDS_ORDER: &str = "AKQJT98765432";
-const CARDS_ORDER_2: &str = "AKQT98765432J";
 
 #[derive(Eq, PartialEq, Debug)]
 struct Hand {
@@ -10,102 +9,63 @@ struct Hand {
 }
 
 impl Hand {
-    fn weight(&self) -> usize {
-        return self
-            .cards
-            .chars()
-            .map(|c| CARDS_ORDER.find(c).unwrap())
-            .fold(0, |a, v| a * 16 + v);
-    }
-    fn weight2(&self) -> usize {
-        return self
-            .cards
-            .chars()
-            .map(|c| CARDS_ORDER_2.find(c).unwrap())
-            .fold(0, |a, v| a * 16 + v);
-    }
-    fn rank(&self) -> u8 {
+    // Calculates the rank of a hand: five of a kind = 0, ..., high card = 6
+    fn rank(&self, joker: char) -> u8 {
+        let jokers = self.cards.chars().filter(|c| *c == joker).count();
         let mut kinds: HashMap<char, usize> = HashMap::new();
-        self.cards.chars().fold(&mut kinds, |acc, c| {
-            *acc.entry(c).or_insert(0) += 1;
-            acc
-        });
-        if kinds.len() == 1 {
-            return 0;
-        }
-        if kinds.len() == 2 && *kinds.values().max().unwrap() == 4 {
-            return 1;
-        }
-        if kinds.len() == 2 {
-            return 2;
-        }
-        if kinds.len() == 3 && *kinds.values().max().unwrap() == 3 {
-            return 3;
-        }
-        if kinds.len() == 3 {
-            return 4;
-        }
-        if kinds.len() == 4 {
-            return 5;
-        }
-        return 6;
-    }
-
-    fn rank2(&self) -> u8 {
-        let mut kinds: HashMap<char, usize> = HashMap::new();
-        let jokers = self.cards.chars().filter(|c| *c == 'J').count();
-        self.cards.chars().filter(|c| *c != 'J').fold(&mut kinds, |acc, c| {
-            *acc.entry(c).or_insert(0) += 1;
-            acc
-        });
+        self.cards
+            .chars()
+            .filter(|c| *c != joker)
+            .fold(&mut kinds, |acc, c| {
+                *acc.entry(c).or_insert(0) += 1;
+                acc
+            });
         let len = kinds.len();
         let mut longest = kinds.values().max().and_then(|a| Some(*a)).unwrap_or(0);
-        if len == 0 {
-            return 0;
-        }
         longest += jokers;
-        if len == 1 {
-            return 0;
+        match (len, longest) {
+            (0, _) => 0, // all jokers == five of a kind
+            (1, _) => 0, // five of a kind
+            (2, 4) => 1, // four of a kind
+            (2, _) => 2, // full house
+            (3, 3) => 3, // three of a kind
+            (3, _) => 4, // two pairs
+            (4, _) => 5, // a pair
+            _ => 6,      // high card
         }
-        if len == 2 && longest == 4 {
-            return 1;
-        }
-        if len == 2 {
-            return 2;
-        }
-        if len == 3 && longest == 3 {
-            return 3;
-        }
-        if len == 3 {
-            return 4;
-        }
-        if len == 4 {
-            return 5;
-        }
-        return 6;
     }
-}
 
-impl Ord for Hand {
-    fn cmp(&self, other: &Self) -> Ordering {
+    // Calculates a weight of a hand based on individual cards:
+    // such as the stronger card has a less weight
+    fn weight(&self, joker: char, ordering: &str) -> usize {
         return self
-            .rank()
-            .cmp(&other.rank())
-            .then_with(|| self.weight().cmp(&other.weight()));
+            .cards
+            .chars()
+            .map(|c| {
+                if c == joker {
+                    ordering.len()
+                } else {
+                    ordering.find(c).unwrap()
+                }
+            })
+            .fold(0, |a, v| a * (ordering.len() + 1) + v);
     }
 }
 
-impl PartialOrd for Hand {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
+fn comparator(joker: char) -> impl for<'a, 'b> Fn(&'a Hand, &'b Hand) -> std::cmp::Ordering {
+    return move |lhs: &Hand, rhs: &Hand| -> Ordering {
+        return lhs.rank(joker).cmp(&rhs.rank(joker)).then_with(|| {
+            lhs.weight(joker, CARDS_ORDER)
+                .cmp(&rhs.weight(joker, CARDS_ORDER))
+        });
+    };
 }
 
-fn part2cmp(lhs: &Hand, rhs: &Hand) -> Ordering {
-    return lhs
-            .rank2()
-            .cmp(&rhs.rank2())
-            .then_with(|| lhs.weight2().cmp(&rhs.weight2()));
+fn accumulate_bids(hands: &Vec<Hand>) -> usize {
+    return hands.iter().enumerate().fold(0, |acc, h| {
+        let (ind, &ref hand) = h;
+        return acc + (hands.len() - ind) * hand.bid;
+    });
 }
 
 fn main() {
@@ -118,19 +78,8 @@ fn main() {
             bid: s.next().unwrap().parse().unwrap(),
         })
         .collect();
-    hands.sort();
-    let part1 = hands.iter().enumerate().fold(0, |acc, h| {
-        let (ind, &ref hand) = h;
-        return acc + (hands.len() - ind) * hand.bid
-    });
-    hands.sort_by(part2cmp);
-    for h in &hands {
-        println!("{} {} {}", h.cards, h.rank(), h.weight());
-    }
-    let part2 = hands.iter().enumerate().fold(0, |acc, h| {
-        let (ind, &ref hand) = h;
-        return acc + (hands.len() - ind) * hand.bid
-    });
-    println!("{}", part1);
-    println!("{}", part2);
+    hands.sort_by(comparator(' '));
+    println!("Part 1: {}", accumulate_bids(&hands));
+    hands.sort_by(comparator('J'));
+    println!("Part 2: {}", accumulate_bids(&hands));
 }
