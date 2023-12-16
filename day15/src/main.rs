@@ -1,10 +1,15 @@
 use anyhow::{Context, Ok, Result};
-use std::{cell::RefCell, collections::HashMap, fs, rc::{Rc, Weak}};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs,
+    rc::{Rc, Weak},
+};
 
 struct LenseNode {
     focus: usize,
     next: Option<Rc<RefCell<LenseNode>>>,
-    prev: Option<Rc<RefCell<LenseNode>>>,
+    prev: Option<Weak<RefCell<LenseNode>>>,
 }
 
 struct LenseList {
@@ -22,7 +27,7 @@ impl LenseList {
         let tail = Rc::new(RefCell::new(LenseNode {
             focus: 0,
             next: None,
-            prev: Some(head.clone()),
+            prev: Some(Rc::downgrade(&head)),
         }));
         head.borrow_mut().next = Some(tail.clone());
         Self {
@@ -38,15 +43,15 @@ impl LenseList {
             prev: self.tail.borrow().prev.clone(),
         }));
         if let Some(prev) = self.tail.borrow().prev.clone() {
-            prev.borrow_mut().next = Some(node.clone());
+            prev.upgrade().unwrap().borrow_mut().next = Some(node.clone());
         }
-        self.tail.borrow_mut().prev = Some(node.clone());
+        self.tail.borrow_mut().prev = Some(Rc::downgrade(&node));
         return node.clone();
     }
 
     fn remove(&mut self, node: Rc<RefCell<LenseNode>>) {
         if let (Some(prev), Some(next)) = (node.borrow().prev.clone(), node.borrow().next.clone()) {
-            prev.borrow_mut().next = Some(next.clone());
+            prev.upgrade().unwrap().borrow_mut().next = Some(next.clone());
             next.borrow_mut().prev = Some(prev.clone());
         }
     }
