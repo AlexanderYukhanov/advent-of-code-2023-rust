@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
-use std::{char, collections::HashSet, fmt::Debug, fs};
+use std::{char, fmt::Debug, fs};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum Direction {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT,
+    UP = 1,
+    DOWN = 2,
+    LEFT = 4,
+    RIGHT = 8,
 }
 
 impl Direction {
@@ -70,24 +70,13 @@ impl Direction {
     }
 }
 
-impl Into<char> for Direction {
-    fn into(self) -> char {
-        match self {
-            Direction::UP => '^',
-            Direction::DOWN => 'v',
-            Direction::LEFT => '<',
-            Direction::RIGHT => '>',
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct Position {
     r: usize,
     c: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct Beam {
     pos: Position,
     dir: Direction,
@@ -104,7 +93,7 @@ impl Beam {
 
 struct BeamTracer<'a> {
     pending: Vec<Beam>,
-    processed: HashSet<Beam>,
+    processed: Vec<Vec<u8>>,
     field: &'a Vec<Vec<char>>,
 }
 
@@ -112,21 +101,19 @@ impl<'a> BeamTracer<'a> {
     fn new(field: &'a Vec<Vec<char>>, enter: Beam) -> Self {
         Self {
             pending: vec![enter.clone()],
-            processed: HashSet::new(),
+            processed: vec![vec![0; field[0].len()]; field.len()],
             field: field,
         }
     }
 
     fn trace_beam(&mut self, beam: Beam) {
-        if !self.processed.insert(beam) {
-            return;
-        }
+        self.processed[beam.pos.r][beam.pos.c] |= beam.dir as u8;
         let reflected = beam.dir.reflect(self.field[beam.pos.r][beam.pos.c]);
         for dir in reflected {
             if let Some(pos) = dir.advance(beam.pos, self.field.len() - 1, self.field[0].len() - 1)
             {
                 let nb = Beam { pos, dir };
-                if !self.processed.contains(&nb) {
+                if self.processed[nb.pos.r][nb.pos.c] & nb.dir as u8 != nb.dir as u8 {
                     self.pending.push(nb);
                 }
             }
@@ -141,7 +128,10 @@ impl<'a> BeamTracer<'a> {
 
     fn count_energized(&mut self) -> usize {
         self.trace();
-        HashSet::<&Position>::from_iter(self.processed.iter().map(|p| &p.pos)).len()
+        self.processed
+            .iter()
+            .map(|v| v.iter().filter(|m| **m != 0).count())
+            .sum()
     }
 }
 
