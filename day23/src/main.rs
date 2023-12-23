@@ -1,6 +1,12 @@
-use std::{fs, collections::HashSet, cmp};
+use std::{cmp, collections::HashSet, fs};
 
-fn dfs(x: i32, y: i32, map: &Vec<Vec<char>>, visited: &mut HashSet<i32>) -> Option<usize> {
+fn dfs(
+    filter: fn(char, i32, i32) -> bool,
+    x: i32,
+    y: i32,
+    map: &Vec<Vec<char>>,
+    visited: &mut HashSet<i32>,
+) -> Option<usize> {
     if x == 1 && y == 0 {
         return Some(0);
     }
@@ -16,18 +22,9 @@ fn dfs(x: i32, y: i32, map: &Vec<Vec<char>>, visited: &mut HashSet<i32>) -> Opti
             if nx < 0 || nx == map[0].len() as i32 || ny < 0 || ny == map.len() as i32 {
                 continue;
             }
-            let ch = map[ny as usize][nx as usize];
-            let allowed = match (ch, dx, dy) {
-                ('#', _, _) => false,
-                ('.', _, _) => true,
-                ('^', _, 1) => true,
-                ('v', _, -1) => true,
-                ('<', 1, _) => true,
-                ('>', -1, _) => true,
-                _ => false,
-            };
-            if allowed && visited.insert(ny * 255 + nx){
-                if let Some(r) = dfs(nx, ny, map, visited) {
+            let allowed = filter(map[ny as usize][nx as usize], dx, dy);
+            if allowed && visited.insert(ny * 255 + nx) {
+                if let Some(r) = dfs(filter, nx, ny, map, visited) {
                     found = true;
                     result = cmp::max(result, r);
                 }
@@ -42,6 +39,22 @@ fn dfs(x: i32, y: i32, map: &Vec<Vec<char>>, visited: &mut HashSet<i32>) -> Opti
     }
 }
 
+fn filter_scopes(ch: char, dx: i32, dy: i32) -> bool {
+    match (ch, dx, dy) {
+        ('#', _, _) => false,
+        ('.', _, _) => true,
+        ('^', _, 1) => true,
+        ('v', _, -1) => true,
+        ('<', 1, _) => true,
+        ('>', -1, _) => true,
+        _ => false,
+    }
+}
+
+fn filter_walls(ch: char, _: i32, _: i32) -> bool {
+    ch != '#'
+}
+
 fn main() {
     let field: Vec<Vec<char>> = fs::read_to_string("input.txt")
         .unwrap()
@@ -50,11 +63,12 @@ fn main() {
         .filter(|s| !s.is_empty())
         .map(|s| s.chars().collect())
         .collect();
-    let mut visited =  &mut HashSet::new();
+    let mut visited = &mut HashSet::new();
     let x = field[0].len() as i32 - 2;
     let y = field.len() as i32 - 1;
     visited.insert(y * 255 + x);
-    println!("{}:{}", x, y);
-    let part1 = dfs(x, y, &field, &mut visited);
+    let part1 = dfs(filter_scopes, x, y, &field, &mut visited);
     println!("Part 1: {:?}", part1);
+    let part2 = dfs(filter_walls, x, y, &field, &mut visited);
+    println!("Part 2: {:?}", part2);
 }
