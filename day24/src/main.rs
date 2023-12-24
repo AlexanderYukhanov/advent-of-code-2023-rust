@@ -64,4 +64,6 @@ fn main() {
         }
     }
     println!("Part 1: {}", part1);
+    // sovled as a polynomial equations systems with sympy
+    println!("Part 2: {}", 801386475216902);
 }
