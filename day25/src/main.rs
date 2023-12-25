@@ -3,6 +3,8 @@ use std::{
     fs,
 };
 
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 type Graph = HashMap<String, Vec<String>>;
 
 fn visit(gr: &HashMap<String, Vec<String>>, cut: &HashSet<&String>) -> usize {
@@ -23,30 +25,39 @@ fn visit(gr: &HashMap<String, Vec<String>>, cut: &HashSet<&String>) -> usize {
     visited.len()
 }
 
-fn build_spanning_tree(graph: &Graph, src: &str) -> Graph {
+fn build_spanning_tree(graph: &Graph, src: &str, exclude: &str) -> Graph {
     let mut visited = HashSet::new();
     let mut spanning_tree = HashMap::new();
 
-    dfs(graph, src, &mut visited, &mut spanning_tree);
+    dfs(graph, src, &mut visited, &mut spanning_tree, exclude);
 
     spanning_tree
 }
 
-fn dfs(gr: &Graph, srs: &str, visited: &mut HashSet<String>, spanning_tree: &mut Graph) {
-    visited.insert(srs.to_string());
+fn dfs(
+    gr: &Graph,
+    src: &str,
+    visited: &mut HashSet<String>,
+    spanning_tree: &mut Graph,
+    exclude: &str,
+) {
+    visited.insert(src.to_string());
 
-    for dst in &gr[srs] {
+    for dst in &gr[src] {
         if !visited.contains(dst) {
+            if edge_to_str(dst, src) == exclude {
+                continue;
+            }
             spanning_tree
-                .entry(srs.to_string())
+                .entry(src.to_string())
                 .or_insert_with(Vec::new)
                 .push(dst.to_string());
             spanning_tree
                 .entry(dst.to_string())
                 .or_insert_with(Vec::new)
-                .push(srs.to_string());
+                .push(src.to_string());
 
-            dfs(gr, dst, visited, spanning_tree);
+            dfs(gr, dst, visited, spanning_tree, exclude);
         }
     }
 }
@@ -84,7 +95,7 @@ fn find_bridges(gr: &Graph, cut1: &str, cut2: &str) -> Vec<(String, String)> {
 }
 
 fn dfs2(
-    srs: &str,
+    src: &str,
     gr: &Graph,
     cut1: &str,
     cut2: &str,
@@ -95,18 +106,18 @@ fn dfs2(
     time: &mut usize,
     bridges: &mut Vec<(String, String)>,
 ) {
-    visited.insert(srs.to_string());
+    visited.insert(src.to_string());
     *time += 1;
-    entry_time.insert(srs.to_string(), *time);
-    lowest_time.insert(srs.to_string(), *time);
+    entry_time.insert(src.to_string(), *time);
+    lowest_time.insert(src.to_string(), *time);
 
-    for dst in &gr[srs] {
-        let edge = edge_to_str(srs, dst);
+    for dst in &gr[src] {
+        let edge = edge_to_str(src, dst);
         if edge == cut1 || edge == cut2 {
             continue;
         }
         if !visited.contains(dst) {
-            parent.insert(dst.to_string(), srs.to_string());
+            parent.insert(dst.to_string(), src.to_string());
             dfs2(
                 dst,
                 gr,
@@ -120,19 +131,16 @@ fn dfs2(
                 bridges,
             );
 
-            if let Some(&lt) = lowest_time.get(&srs.to_string()) {
-                lowest_time.insert(
-                    srs.to_string(),
-                    lt.min(*lowest_time.get(dst).unwrap()),
-                );
+            if let Some(&lt) = lowest_time.get(&src.to_string()) {
+                lowest_time.insert(src.to_string(), lt.min(*lowest_time.get(dst).unwrap()));
             }
 
-            if *lowest_time.get(dst).unwrap() > *entry_time.get(srs).unwrap() {
-                bridges.push((srs.to_string(), dst.to_string()));
+            if *lowest_time.get(dst).unwrap() > *entry_time.get(src).unwrap() {
+                bridges.push((src.to_string(), dst.to_string()));
             }
-        } else if parent.get(srs) != Some(dst) {
+        } else if parent.get(src) != Some(dst) {
             lowest_time
-                .entry(srs.to_string())
+                .entry(src.to_string())
                 .and_modify(|lt| *lt = (*lt).min(*entry_time.get(dst).unwrap()));
         }
     }
@@ -140,7 +148,6 @@ fn dfs2(
 
 fn main() {
     let mut gr: HashMap<String, Vec<String>> = HashMap::new();
-    let mut edges: Vec<String> = vec![];
     fs::read_to_string("input.txt")
         .unwrap()
         .lines()
@@ -153,39 +160,49 @@ fn main() {
                     gr.entry(String::from(dst))
                         .or_insert(vec![])
                         .push(String::from(src));
-                    edges.push(edge_to_str(src, dst));
                 }
             }
         });
-    let spanning_tree = build_spanning_tree(&gr, gr.keys().next().unwrap());
-    let spanning_tree_edges: HashSet<String> = spanning_tree
+    let spanning_tree = build_spanning_tree(&gr, gr.keys().next().unwrap(), "");
+    let edges: HashSet<String> = spanning_tree
         .iter()
         .map(|(src, dsts)| dsts.iter().map(|dst| edge_to_str(src, &dst)))
         .flatten()
         .collect();
-    let remaining_edges: Vec<&String> = edges
-        .iter()
-        .filter(|e| !spanning_tree_edges.contains(*e))
-        .collect();
-    let spanning_tree_edges: Vec<String> = spanning_tree_edges.into_iter().collect();
+    let edges: Vec<String> = edges.into_iter().collect();
 
-    'found: for spanning_tree_edge in &spanning_tree_edges {
-        for i in 0..remaining_edges.len() {
-            let bridges = find_bridges(&gr, spanning_tree_edge.as_str(), remaining_edges[i].as_str());
-            if bridges.len() != 0 {
-                let mut cut: HashSet<&String> = HashSet::new();
-                cut.insert(spanning_tree_edge);
-                cut.insert(remaining_edges[i]);
-                let last_edge = edge_to_str(bridges[0].0.as_str(), bridges[0].1.as_str());
-                cut.insert(&last_edge);
-                let connected = visit(&gr, &cut);
-                println!(
-                    "Part 1: {} -> {}",
-                    connected,
-                    connected * (gr.len() - connected)
-                );
-                break 'found;
-            }
+    let progress = indicatif::ProgressBar::new(edges.len() as u64);
+    for first in &edges {
+        progress.inc(1);
+        let updated_tree = build_spanning_tree(&gr, gr.keys().next().unwrap(), &first);
+        let updated_edges: HashSet<String> = updated_tree
+            .iter()
+            .map(|(src, dsts)| dsts.iter().map(|dst| edge_to_str(src, &dst)))
+            .flatten()
+            .collect();
+        let updated_edges: Vec<String> = updated_edges.into_iter().collect();
+        if let Some(r) = updated_edges
+            .into_par_iter()
+            .filter_map(|second| {
+                let bridges = find_bridges(&gr, first.as_str(), &second.as_str());
+
+                if bridges.len() != 0 {
+                    let mut cut: HashSet<&String> = HashSet::new();
+                    cut.insert(first);
+                    cut.insert(&second);
+                    let last_edge = edge_to_str(bridges[0].0.as_str(), bridges[0].1.as_str());
+                    cut.insert(&last_edge);
+                    let connected = visit(&gr, &cut);
+                    Some(connected * (gr.len() - connected))
+                } else {
+                    None
+                }
+            })
+            .find_any(|_| true)
+        {
+            progress.finish();
+            println!("Part 1: {}", r);
+            break;
         }
     }
 }
